@@ -128,7 +128,7 @@ Die App ist eine beauftragte **Teilmenge von P0**. Der größere Plattformentwur
 | Team | Schwerpunkt im gemeinsamen Konzept |
 |---|---|
 | Design | Gestaltung und verständliche Bedienung; weitergehende Zuständigkeit gemeinsam abstimmen |
-| **Routing – unser Team** | Lieferbarkeit, Transportkosten, Zeit und Kapazitäten; später Fahrzeugzuweisung und Tourenbündelung |
+| Routing | Lieferbarkeit, Transportkosten, Zeit und Kapazitäten; später Fahrzeugzuweisung und Tourenbündelung |
 | Drohnen Typen | Fahrzeuge, Leistungsdaten und belegte Einsatzgrenzen |
 | Packstationen | Standorte, Übergabe, Kapazitäten und Ladeinfrastruktur |
 
