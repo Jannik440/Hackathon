@@ -1,6 +1,6 @@
 # Fly2You
 
-Mobile Pitch-App für eine lokale Lieferplattform in Wuppertal. Hackathon **Vibecode+ · Team Routing**.
+Mobile Pitch-App für eine lokale Lieferplattform in Wuppertal. Hackathon **Vibecode+ · Gruppe 4**.
 
 **Implementiert, Stand 21. Oktober 2026:** Produkte entdecken und Filialangebote vergleichen, einen Einkauf per Drohne zur gewählten Station verfolgen und das fiktive Drohnen-/Stationsnetz erkunden. Drohnenlieferung ist vorausgewählt; Fahrrad und Selbstabholung sind Alternativen. Die Anwendung läuft auf dem Präsentationsrechner und lässt sich im lokalen WLAN öffnen.
 
