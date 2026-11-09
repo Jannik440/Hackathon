@@ -206,7 +206,7 @@ test('station arrival, deposit, readiness and customer collection remain four ev
   expect((await savedSession(page)).stationStep).toBe(5);
 });
 
-test('routing finds the blocked-corridor alternative and explains full, offline and weather stops', async ({ page }) => {
+test('routing finds the blocked-corridor alternative and explains full and offline stops', async ({ page }) => {
   await nav(page, 'Routing').click();
   await page.getByRole('combobox', { name: 'Ziel', exact: true }).selectOption('Z03');
   await expect(page.getByText('Demo-Weg gefunden', { exact: true })).toBeVisible();
@@ -214,7 +214,7 @@ test('routing finds the blocked-corridor alternative and explains full, offline 
   await scenario.selectOption('blocked');
   await expect(page.getByText('Die Sperrung wird über die Nordverbindung umgangen.')).toBeVisible();
   await expect(page.getByText('WX', { exact: true })).toBeVisible();
-  for (const name of ['full', 'offline', 'weather']) {
+  for (const name of ['full', 'offline']) {
     await scenario.selectOption(name);
     await expect(page.getByText('Kein Start', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Simulation abspielen', exact: true })).toBeDisabled();
@@ -223,6 +223,42 @@ test('routing finds the blocked-corridor alternative and explains full, offline 
   await scenario.selectOption('normal');
   await expect(page.getByRole('button', { name: 'Simulation abspielen', exact: true })).toBeEnabled();
   await noHorizontalOverflow(page);
+});
+
+test('routing is a drone overview with minimal stations and several simulated flights', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await nav(page, 'Routing').click();
+  // Nur Hub und gewähltes Ziel bleiben als Marker.
+  await expect(page.locator('.leaflet-marker-icon[title*="fiktiver Standort"]')).toHaveCount(2);
+  const drones = page.locator('.leaflet-marker-icon[title^="Drohne"]');
+  await expect(drones).toHaveCount(2);
+  await expect(page.getByText('2 simulierte Drohnen im Flug · Beispielzeiten')).toBeVisible();
+  const firstTransform = await drones.first().evaluate(element => getComputedStyle(element).transform);
+  await expect.poll(async () => drones.first().evaluate(element => getComputedStyle(element).transform), { timeout: 5000 }).not.toBe(firstTransform);
+  await page.getByRole('button', { name: 'Netz', exact: true }).first().click();
+  await expect(page.locator('[class*="schematicVehicle"]')).toHaveCount(2);
+  // Ausgefallenes Ziel: keine Drohne im Flug, keine Flugspur in der Netzansicht.
+  await page.getByRole('combobox', { name: 'Szenario', exact: true }).selectOption('offline');
+  await expect(page.locator('[class*="schematicVehicle"]')).toHaveCount(0);
+  await expect(page.getByText('Demo-Netz · Beispielzeiten')).toBeVisible();
+  await noHorizontalOverflow(page);
+});
+
+test('station map mirrors the step list from hub to station and back', async ({ page }) => {
+  await nav(page, 'Stationen').click();
+  await expect(page.locator('.leaflet-marker-icon[title*="fiktiver Standort"]')).toHaveCount(2);
+  const drone = page.locator('.leaflet-marker-icon[title="Simulierte Drohnenposition"]');
+  await expect(drone).toHaveCount(1);
+  const hubPosition = await drone.evaluate(element => getComputedStyle(element).transform);
+  await step(page);
+  await step(page);
+  await expect(page.getByText('Die Drohne ist angekommen. Das Paket ist noch nicht eingelagert.')).toBeVisible();
+  const stationPosition = await drone.evaluate(element => getComputedStyle(element).transform);
+  expect(stationPosition).not.toBe(hubPosition);
+  await step(page, 2);
+  await page.getByRole('button', { name: 'Abholung in der Demo bestätigen', exact: true }).click();
+  await expect(page.getByText('Die Drohne ist zurück am Hub; der Rückflug ist simuliert.')).toBeVisible();
+  await expect.poll(async () => drone.evaluate(element => getComputedStyle(element).transform), { timeout: 3000 }).toBe(hubPosition);
 });
 
 test('tile failure leaves routing, attribution and a schematic fallback usable', async ({ page }) => {
@@ -256,8 +292,7 @@ test('weather provenance stays separate from scenario values and remains explici
   const weather = page.getByRole('region', { name: 'Wetter entlang der Route' });
   await weather.getByRole('button', { name: 'Daten & 24-Stunden-Vorschau' }).click();
   await expect(weather.getByText('Online-Vorhersage', { exact: true })).toBeVisible();
-  await page.getByRole('combobox', { name: 'Szenario', exact: true }).selectOption('weather');
-  await expect(page.getByText(/Simulierter Wetterstopp:/).first()).toBeVisible();
+  await page.getByRole('combobox', { name: 'Szenario', exact: true }).selectOption('blocked');
   await expect(weather.getByText('Online-Vorhersage', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Pitch-Menü', exact: true }).click();
   const pitch = page.getByRole('dialog', { name: 'Dein Pitch. Dein Tempo.' });
@@ -414,7 +449,7 @@ test('1440px: the drone landing and default station checkout fit the desktop vie
   await expect.poll(()=>page.getByRole('img',{name:'KI-Konzeptbild einer Lieferdrohne mit Paket über einer Stadt',exact:true}).evaluate(element=>(element as HTMLImageElement).naturalWidth>0)).toBe(true);
   await page.screenshot({path:'/tmp/fly2you-desktop-final.png'});
   await productButton(page).click();
-  const sidebar = page.getByRole('complementary', { name: 'Warenkorb', exact: true });
+  const sidebar = page.getByRole('complementary', { name: 'Deine Tasche', exact: true });
   await expect(sidebar.getByRole('button', { name: /Drohne.*zur Station/i })).toHaveAttribute('aria-pressed', 'true');
   await expect(sidebar.getByRole('combobox', { name: 'Zielstation', exact: true })).toHaveValue('Z03');
   const cart = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
@@ -423,12 +458,11 @@ test('1440px: the drone landing and default station checkout fit the desktop vie
   await noHorizontalOverflow(page);
 });
 
-test('drone quotes stop for full or offline stations and weather while alternatives remain usable', async ({ page }) => {
+test('drone quotes stop for full or offline stations while alternatives remain usable', async ({ page }) => {
   await productButton(page).click();
   const cases = [
     { scenario: 'full', reason: /Alle Fächer der Zielstation sind im Szenario belegt/ },
     { scenario: 'offline', reason: /Die Zielstation ist im Szenario ausgefallen/ },
-    { scenario: 'weather', reason: /Simulierter Wetterstopp: Der Start wird verschoben/ },
   ];
   for (const item of cases) {
     await nav(page, 'Routing').click();
@@ -477,6 +511,83 @@ test('an available drone detour is snapshotted and keeps its destination after r
   await expect(page.getByRole('heading', { name: 'Deine Lieferung. Im Blick.', exact: true })).toBeVisible();
   await expect(page.getByText('Station Barmen', { exact: true }).first()).toBeVisible();
   expect((await savedSession(page)).orders[0].quote).toEqual(original);
+  await noHorizontalOverflow(page);
+});
+
+test('routing offers exactly one map switch and both views agree', async ({ page }) => {
+  await nav(page, 'Routing').click();
+  // Der Aufrufer stellt den Umschalter; die Karte darf keinen zweiten anbieten.
+  const groups = page.getByRole('group', { name: 'Kartenansicht', exact: true });
+  await expect(groups).toHaveCount(1);
+  const mapButton = groups.getByRole('button', { name: 'Karte', exact: true });
+  const netzButton = groups.getByRole('button', { name: 'Netz', exact: true });
+  await expect(mapButton).toHaveAttribute('aria-pressed', 'true');
+  await netzButton.click();
+  await expect(netzButton).toHaveAttribute('aria-pressed', 'true');
+  await expect(mapButton).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.getByLabel('Schematisches Demo-Netz, keine geografisch genaue Karte')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Netz', exact: true })).toHaveCount(1);
+  await mapButton.click();
+  await expect(mapButton).toHaveAttribute('aria-pressed', 'true');
+  await expect(groups).toHaveCount(1);
+  await nav(page, 'Stationen').click();
+  // In der Stationsansicht bleibt genau ein Umschalter übrig.
+  const stationGroups = page.getByRole('group', { name: 'Kartenansicht', exact: true });
+  await expect(stationGroups).toHaveCount(1);
+  await expect(stationGroups.getByRole('button', { name: 'Netz', exact: true })).toHaveCount(1);
+});
+
+test('order details show German status labels instead of internal codes', async ({ page }) => {
+  await startOrder(page);
+  const details = page.locator('details').filter({ hasText: 'Bestelldetails' });
+  await details.locator('summary').click();
+  const text = await details.innerText();
+  expect(text).toContain('Eingegangen');
+  expect(text).toContain('Demo-Zahlung autorisiert');
+  expect(text).toContain('Neu beim Händler');
+  expect(text).not.toMatch(/\b(PENDING|CONFIRMED|AUTHORIZED|CAPTURED|NEW|ACCEPTED|CREATED|ASSIGNED)\b/);
+  await step(page);
+  const accepted = await details.innerText();
+  expect(accepted).toContain('Bestätigt');
+  expect(accepted).toContain('Demo-Zahlung bestätigt');
+  expect(accepted).toContain('Vom Händler angenommen');
+});
+
+test('search finds visible category names', async ({ page }) => {
+  const box = page.getByRole('textbox', { name: 'Produkte oder Händler suchen' });
+  await box.fill('Blumen');
+  await expect(page.getByRole('article').filter({ hasText: 'Tulpenstrauß' })).toBeVisible();
+  await expect(page.getByRole('article').filter({ hasText: 'Bio Haferflocken' })).toHaveCount(0);
+  await box.fill('Technik');
+  await expect(page.getByRole('article').filter({ hasText: 'Wireless-Kopfhörer' })).toBeVisible();
+  await expect(page.getByRole('article').filter({ hasText: 'Tulpenstrauß' })).toHaveCount(0);
+  await box.fill('kein Treffer erwartet');
+  await expect(page.getByRole('button', { name: 'Filter zurücksetzen' })).toBeVisible();
+});
+
+test('autumn leaves toggle sits next to the theme switch, starts off and keeps its choice', async ({ page }) => {
+  const toggle = page.getByRole('button', { name: /Herbstlaub (ein|aus)blenden/, exact: true });
+  await expect(toggle).toHaveCount(1);
+  await expect(toggle).toContainText('🍁');
+  // Der Umschalter steht direkt neben dem Theme-Schalter.
+  await expect(page.getByRole('button', { name: /modus einschalten$/, exact: true })).toHaveCount(1);
+  const order = await page.evaluate(() => [...document.querySelectorAll('header button')].map((button) => button.getAttribute('aria-label') ?? ''));
+  const themeIndex = order.findIndex((label) => /modus einschalten$/.test(label));
+  const leafIndex = order.findIndex((label) => /Herbstlaub/.test(label));
+  expect(leafIndex).toBe(themeIndex + 1);
+  // Standard: aus – auch im Herbst.
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('canvas')).toHaveCount(0);
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('canvas')).toHaveCount(1);
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Herbstlaub ausblenden', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Herbstlaub ausblenden', exact: true }).click();
+  await expect(page.locator('canvas')).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Herbstlaub einblenden', exact: true })).toHaveAttribute('aria-pressed', 'false');
   await noHorizontalOverflow(page);
 });
 

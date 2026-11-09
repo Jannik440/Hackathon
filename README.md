@@ -42,25 +42,144 @@ Standardmäßig sind keine API-Schlüssel erforderlich. [`.env.example`](.env.ex
 
 `NEXT_PUBLIC_*` wird in den Browserbuild übernommen. Nach Änderungen erneut `npm run build` ausführen und den Server neu starten. Diese Variablen dürfen keine Geheimnisse enthalten. Bei einer anderen Kartenquelle gelten deren Nutzungsbedingungen.
 
+## Öffentlicher Zugriff über Cloudflare Tunnel
+
+Der Tunnel macht den lokalen Server ohne Router-Freigabe oder Cloudflare-Konto
+im Internet erreichbar. Er ist für Demo und Präsentation gedacht, nicht als
+Produktionsbetrieb.
+
+### Production-Server veröffentlichen
+
+Terminal 1:
+
+```sh
+npm ci
+npm run build
+npm start
+```
+
+Terminal 2:
+
+```sh
+npm run cloudflare:tunnel
+```
+
+Die Ausgabe von cloudflared enthält eine URL wie
+`https://<zufall>.trycloudflare.com`. Diese URL im Browser öffnen.
+
+### Entwicklungsserver veröffentlichen
+
+```sh
+npm run dev
+# zweites Terminal
+npm run cloudflare:tunnel -- --port 3000
+```
+
+### Installation ohne npm-Abhängigkeit
+
+`npm run cloudflare:tunnel` installiert cloudflared beim ersten Start
+automatisch nach `.tools/`. Das funktioniert auf:
+
+- macOS Intel und Apple Silicon
+- Linux x64 und arm64
+- Windows x64
+
+Es wird kein Homebrew, kein winget und kein zusätzliches npm-Paket benötigt.
+Für eine manuelle Installation:
+
+```sh
+npm run cloudflare:install
+```
+
+Ein vorhandenes Binary kann erzwungen werden:
+
+```sh
+CLOUDFLARED_BIN=/absoluter/pfad/cloudflared npm run cloudflare:tunnel
+```
+
+Auf macOS kann ein bereits installiertes Homebrew-Binary verwendet werden:
+
+```sh
+CLOUDFLARED_BIN="$(brew --prefix cloudflared)/bin/cloudflared" npm run cloudflare:tunnel
+```
+
+### Grenzen
+
+- Quick Tunnels haben keine Uptime-Garantie.
+- Die URL ändert sich bei jedem Neustart.
+- Für eine feste Domain ist ein benannter Cloudflare-Tunnel mit Account
+  erforderlich.
+- Der Tunnel veröffentlicht die Demo-App. Keine echten Zahlungs-, Liefer- oder
+  Flugdaten und keine Geheimnisse in der App hinterlegen.
+- Bei einem Netzwerkwechsel zuerst den Server neu starten und die neue lokale
+  Erreichbarkeit prüfen.
+
+### Mockup und Produktionsseite gemeinsam mit QR-Codes
+
+`launch_sites_qr.py` startet beide Websites gleichzeitig und veröffentlicht jede
+über einen eigenen Cloudflare Quick Tunnel:
+
+```sh
+python3 launch_sites_qr.py
+python3 launch_sites_qr.py --rebuild          # beide Builds neu erzeugen
+python3 launch_sites_qr.py --prod-port 3000 --mockup-port 4173
+```
+
+| Bestandteil | Lokal | Veröffentlichung |
+|---|---|---|
+| Produktionsseite | `next start` auf `127.0.0.1:3000` | Quick Tunnel → `https://<zufall>.trycloudflare.com` |
+| Mockup (`Mockup/app/dist`) | statischer Python-Server auf `127.0.0.1:4173` | Quick Tunnel → `https://<zufall>.trycloudflare.com` |
+
+Im Projektstamm entstehen zwei beschriftete QR-Bilder: `qr-mockup.png` (Aufschrift
+**MOCKUP**) und `qr-prod.png` (Aufschrift **PROD**). Jedes Bild enthält zusätzlich
+die öffentliche URL als Text. Die Dateien sind generierte Laufzeitartefakte und
+werden nicht versioniert; die URL ändert sich bei jedem Start.
+
+Voraussetzungen: Python 3 mit `qrcode` und Pillow, Node.js und `cloudflared`
+(wird bei Bedarf über `scripts/install-cloudflared.mjs` nach `.tools/` geladen).
+Fehlt ein Build oder ist er älter als die Quelldateien, wird er automatisch neu
+erzeugt. `Ctrl+C` beendet beide Server und beide Tunnel; die Ports werden
+freigegeben.
+
+**Geprüft am 22. Oktober 2026:** Beide öffentlichen URLs antworteten mit HTTP 200
+und dem erwarteten Seitentitel (`FlyToYou - Lokale Lieferplattform` für das Mockup,
+`Fly2You · Wuppertal` für die Produktionsseite), die QR-Bilder wurden dekodiert und
+enthielten die jeweilige URL, und `Ctrl+C`/SIGTERM beendeten Server und Tunnel ohne
+verbleibende Prozesse auf Port 3000/4173. Quick Tunnels bleiben ohne Uptime-Zusage.
+
+## Statische Vorschau auf GitHub Pages
+
+Die statische Vorschau ist veröffentlicht: `https://basalthasar.github.io/Hackathon/`. Sie liegt im Branch `gh-pages` und wird mit `GITHUB_PAGES=true NEXT_PUBLIC_BASE_PATH=/Hackathon NEXT_PUBLIC_STATIC_EXPORT=true npm run build` erzeugt; für diesen Build entfallen die API-Route und `*.test.ts`, zusätzlich wird `.nojekyll` gesetzt. Für eine automatische Veröffentlichung liegt eine Workflow-Vorlage in `docs/deploy/pages.yml`; sie muss nach `.github/workflows/pages.yml` kopiert werden, sobald der Token den Scope `workflow` hat.
+
+- **Voraussetzung:** Repository öffentlich (oder GitHub Pro) und unter *Settings → Pages → Source* die Option **GitHub Actions**.
+- **Basis-Pfad:** Projektseiten laufen unter `/<repo-name>/`. Der Workflow setzt `NEXT_PUBLIC_BASE_PATH` entsprechend; Bild- und Produktpfade werden über `src/lib/paths.ts` präfixiert.
+- **Grenzen der Vorschau:** Ohne Server gibt es keine Route `/api/weather`. Das Wetterpanel zeigt dann „Nicht verfügbar (statische Vorschau)"; die reale Bewertung bleibt **UNBESTIMMT** und es wird keine Flugfreigabe abgeleitet. Kartenkacheln kommen weiterhin von OpenStreetMap.
+- **Mehrere Pages-Seiten:** GitHub Pages vergibt eine Seite pro Repository. Zusätzlich gibt es die Benutzer-Seite `basalthasar.github.io` (eigenes Repository `Basalthasar.github.io`). Zwei gleichzeitig aktive Pages-Seiten aus demselben Repository sind nicht möglich; für eine zweite Variante braucht es ein zweites Repository oder ein Unterverzeichnis innerhalb derselben Seite.
+
 ## In fünf Minuten vorführen
 
 1. **Entdecken, etwa eine Minute:** „Bio Haferflocken“ suchen und die Filialangebote vergleichen. Zwei Produkte derselben Filiale in die Tasche legen. Ein Artikel einer anderen Filiale zeigt den ausdrücklichen Wechselhinweis; „Tasche behalten“ erhält den bisherigen Einkauf.
 2. **Einkauf, etwa eine Minute:** Tasche öffnen, die vorausgewählte Drohne und eine Zielstation wählen, Demo-Angebot berechnen und „Demo-Bestellung starten“. Gesamtpreis und Zeitspanne sind Demo-Werte. Alternativ „Fahrrad als Alternative“ oder „Abholen“ wählen. Selbstabholung: ohne Liefergebühr und Lieferauftrag.
 3. **Lieferung, etwa eine Minute:** Mit „Pause“ und „Nächster Schritt“ den Ablauf erklären. Händlerannahme, Vorbereitung, Zubringer zum Hub, Drohnenflug, Ankunft, Einlagerung und Abholbereitschaft sind eigene simulierte Ereignisse. Die Wiedergabe stoppt vor der Kundenabholung; diese mit „Abholung in der Demo bestätigen“ abschließen. Die Bewegung folgt einer vorbereiteten Route und ist keine Navigation.
-4. **Routing, etwa eine Minute:** Zielstation Barmen wählen, normalen Weg und „Korridor gesperrt“ vergleichen. Die Nordverbindung umgeht die Sperre. „Zielstation voll“, „Zielstation ausgefallen“ und „Wetterbedingte Pause“ begründen eine Verschiebung.
+4. **Routing, etwa eine Minute:** Zielstation Barmen wählen, normalen Weg und „Korridor gesperrt“ vergleichen. Die Nordverbindung umgeht die Sperre. „Zielstation voll“ und „Zielstation ausgefallen“ begründen eine Verschiebung. Ein simuliertes Wetterszenario gibt es auf Nutzerwunsch (2026-11-08) nicht mehr; die reale Wetterbewertung bleibt davon unberührt **UNBESTIMMT**.
 5. **Stationen und Wetter, etwa eine Minute:** „Simulation abspielen“ öffnet die gesonderte Stationsvorschau. Ankunft, Einlagerung, Abholbereitschaft und Kundenabholung bleiben getrennt. In Routing die Wetterdetails öffnen: Ort, Herkunft, Zeitangaben und Fenster einschließlich Rückweg erläutern. Reale Bewertung: **UNBESTIMMT**.
 
-Das **Pitch-Menü** bietet Seitenwechsel, Pause/Fortsetzung, manuelle Schritte, Szenarioauswahl und einen bestätigten Neustart. Ein Szenario- oder Zielwechsel beginnt die Stationssimulation neu und verwirft ein noch ungebuchtes Drohnen-Angebot. Bestehende Aufträge behalten ihr gespeichertes Ziel und Szenario. Der Neustart löscht Warenkorb, Demo-Bestellungen und Stationsfortschritt dieses Browsers. Jedes Gerät hat eine eigene Sitzung ohne geräteübergreifende Synchronisierung.
+Das **Pitch-Menü** bietet Seitenwechsel, Pause/Fortsetzung, manuelle Schritte, Szenarioauswahl und einen bestätigten Neustart. Ein Szenario- oder Zielwechsel beginnt die Stationssimulation neu und verwirft ein noch ungebuchtes Drohnen-Angebot. Bestehende Aufträge behalten ihr gespeichertes Ziel und Szenario. Der Neustart löscht Tasche, Demo-Bestellungen und Stationsfortschritt dieses Browsers. Jedes Gerät hat eine eigene Sitzung ohne geräteübergreifende Synchronisierung.
+
+In der Oberfläche heißt der Warenkorb durchgängig **Tasche**; die Fachdokumente verwenden weiterhin den Begriff Warenkorb. Der 🍁-Schalter neben dem Hell-/Dunkelmodus blendet einen optionalen Herbstlaub-Effekt ein (nur Ahornblätter, pausiert bei `prefers-reduced-motion`; Standard ist aus, die Wahl wird gespeichert).
+
 
 ## Umfang und Fehlerfälle
 
 - **Katalog:** 6 fiktive Händler, 7 Filialen, 36 Varianten und 40 Angebote. Suche, Kategorien, Filialfilter, Preisreihenfolge und Vergleich derselben Variante. Ausverkaufte Artikel, unbestätigter Bestand und eine geschlossene Filiale sind enthalten.
-- **Bestellung:** Ein-Filial-Warenkorb, Cent-Beträge, 120 Sekunden gültiges Demo-Angebot und erneute Prüfung beim Start. Wiederholter identischer Checkout erzeugt innerhalb derselben Sitzung keine zweite Bestellung. Bestellung, Demo-Zahlung, Vorbereitung und Lieferung haben getrennte Zustände. Drohnen-Quotes berücksichtigen Station und Routen-/Wetterszenario; volle/ausgefallene Ziele und simulierter Wetterstopp sperren neue Drohnen-Checkouts. Eine Korridorsperre kann eine längere Alternative ergeben.
+- **Bestellung:** Eine Filiale pro Tasche, Cent-Beträge, 120 Sekunden gültiges Demo-Angebot und erneute Prüfung beim Start. Wiederholter identischer Checkout erzeugt innerhalb derselben Sitzung keine zweite Bestellung. Bestellung, Demo-Zahlung, Vorbereitung und Lieferung haben getrennte Zustände. Drohnen-Quotes berücksichtigen Station und Routen-/Wetterszenario; volle/ausgefallene Ziele und simulierter Wetterstopp sperren neue Drohnen-Checkouts. Eine Korridorsperre kann eine längere Alternative ergeben.
 - **Routing:** Gerichtetes Dijkstra-Netz mit illustrativen Minutenwerten, einem Hub, 3 Stationen, 3 Drohnen und Zwischenpunkten einschließlich Nord-Alternative. Verfügbarkeit und Zielkapazität werden vor der Wegwahl geprüft. Hinweg, Rückweg und illustrative Übergabezeit bilden das Planfenster.
+  Die Karte ist die Drohnenübersicht: Sie zeigt nur Hub und Zielstation und lässt Drohne A auf dem Hinweg sowie Drohne C auf dem Rückweg als simulierte Dauerflüge kreisen. Bei gesperrtem, vollem, ausgefallenem oder wetterbedingt gesperrtem Ziel entfallen die Flüge. In der Stationsansicht folgt die Karte der Schritte-Liste: Start am Hub, Flug, Ankunft an der Station und nach bestätigter Abholung Rückflug zum Hub.
 - **Karten:** Leaflet und echte geografische Grundlage mit fiktiven Standorten und Routen. Bei Kachelfehlern bleiben Listen und Aktionen nutzbar. Über „Netz“ ist eine schematische Ansicht erreichbar.
 - **Wetter:** `GET /api/weather?locationId=HUB` akzeptiert ausschließlich 7 konfigurierte Demo-Orte. MET Norway liefert eine 24-Stunden-Vorhersage; inklusive angefangener Stunde können 25 Punkte erscheinen. Temperatur, Wind, Richtung, Niederschlagsintervall und Zustand werden mit Zeitbezug angezeigt. Dies ist keine Live-Messung.
+- **Bewegung:** Drohnen gleiten weich zwischen ihren Positionen (Interpolation im Kartenbauteil, kein React-Render pro Frame). Bei `prefers-reduced-motion` bleiben sie statisch.
 - **Wettergrenzen:** Abrufzeit, Anbieteraktualisierung und Prognosezeit sind getrennt. Fehlende Pflichtdaten, Timeout, HTTP 429 und veraltete Daten erzeugen keinen positiven Prüfstatus. Temperatur in 2 m und Wind in 10 m über Modellboden ersetzen keine Daten in Flughöhe. Ungefähr 9 km globale Modellauflösung bildet lokale Gebäudewinde nicht ab.
-- **Datentrennung:** Online-Vorhersage, gespeicherter Wetterstand und simulierte Wettersperre bleiben unterscheidbar. Reale Bewertung immer **UNBESTIMMT**: Fahrzeuggrenzen und vollständige Pflichtdaten fehlen. Cache und 24-Stunden-Altersmarkierung sind technische Demo-Regeln, keine bestätigten Fluggrenzen.
+- **Datentrennung:** Online-Vorhersage und gespeicherter Wetterstand bleiben unterscheidbar; ein simuliertes Wetterszenario ist nicht mehr enthalten. Reale Bewertung immer **UNBESTIMMT**: Fahrzeuggrenzen und vollständige Pflichtdaten fehlen. Cache und 24-Stunden-Altersmarkierung sind technische Demo-Regeln, keine bestätigten Fluggrenzen.
 
 Vorhersagen werden bei Bedarf über den Server geladen; kein regelmäßiges Hintergrund-Polling. Nach längerer Unterbrechung „Wetter neu abrufen“ verwenden. Der prozesslokale Servercache respektiert `Expires` und revalidiert mit `Last-Modified`. Die API ist kein frei verwendbarer Proxy.
 
@@ -68,7 +187,7 @@ Nach dem Laden der Anwendung und ihrer benötigten Ansichten bleiben vorbereitet
 
 ## Produktfotos
 
-Jede der 36 Produktvarianten erhält zwei eigens mit dem integrierten Imagegen-Tool generierte Fotoansichten. Filialangebote derselben Variante teilen dieselben Fotos. Die Produktkarte öffnet eine Galerie mit Hauptbild, zweiter Ansicht, Miniaturen und Warenkorb-Aktion. Die Bilder sind KI-generiert und zeigen keine tatsächlich angeschlossenen Händlerprodukte.
+Jede der 36 Produktvarianten erhält zwei eigens mit dem integrierten Imagegen-Tool generierte Fotoansichten. Filialangebote derselben Variante teilen dieselben Fotos. Die Produktkarte öffnet eine Galerie mit Hauptbild, zweiter Ansicht, Miniaturen und Tasche-Aktion. Die Bilder sind KI-generiert und zeigen keine tatsächlich angeschlossenen Händlerprodukte.
 
 Das Drohnenbild im Startbereich ist eine optimierte Kopie des vorhandenen KI-Konzeptbildes `assets/pitch/04-stadtvision.png`. Die Konzeptbild-Kennzeichnung bleibt sichtbar.
 

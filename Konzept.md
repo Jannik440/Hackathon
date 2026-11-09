@@ -250,7 +250,7 @@ Historischer Übergabestand des Integrationsauftrags, vor der gesonderten Implem
 
 **Umfang:** Entdecken, Lieferung, Stationen, Routing; nach der beauftragten Sortimentserweiterung 6 fiktive Händler mit 7 Filialen, 36 Varianten und 40 Angeboten im Gebiet Elberfeld–Barmen. Der ursprüngliche Pitch-Auftrag umfasste 3 Händler/4 Filialen/20 Varianten; die spätere Nutzererweiterung ist unten dokumentiert. Ein-Filial-Warenkorb mit ausdrücklichem Wechsel, befristetem Demo-Angebot und Gesamtpreis. Drohne zur gewählten Station ist vorausgewählt; Fahrrad zum festen Beispielort und Selbstabholung ohne Lieferauftrag/-gebühr bleiben Alternativen. Ereignisse und Bewegung sind simuliert; Einlagerung, Abholbereitschaft und Kundenabholung bleiben getrennt. Eigenständige Stationsvorschau vom Tracking erreichbar.
 
-**Routing:** Ein Hub, 3 Stationen, 3 Drohnen, gerichtetes Demo-Netz mit Beispielzeiten. Dijkstra prüft verfügbare Verbindungen sowie Zielkapazität und Fahrzeugverfügbarkeit. Reproduzierbare Fälle: normal, Korridorsperre mit Alternative, volle/ausgefallene Station und ausdrücklich simulierte Wetterpause. Keine Flugfreigabe; reale Wetterbewertung ohne belegte Fahrzeuggrenzen und vollständige Pflichtdaten stets **UNBESTIMMT**.
+**Routing:** Ein Hub, 3 Stationen, 3 Drohnen, gerichtetes Demo-Netz mit Beispielzeiten. Dijkstra prüft verfügbare Verbindungen sowie Zielkapazität und Fahrzeugverfügbarkeit. Reproduzierbare Fälle: normal, Korridorsperre mit Alternative sowie volle/ausgefallene Station. Das früher vorgesehene simulierte Wetterszenario ist auf Nutzerwunsch (2026-11-08) entfernt; es hatte keinen Erkenntnisgewinn für die Demo und blockierte die Drohnenübersicht. Keine Flugfreigabe; reale Wetterbewertung ohne belegte Fahrzeuggrenzen und vollständige Pflichtdaten stets **UNBESTIMMT**.
 
 **Online-Daten:** Leaflet mit konfigurierbarer OSM-Kartenquelle und sichtbarer Attribution; Listen und Netzansicht bleiben ohne Kacheln bedienbar. MET Norway Locationforecast über serverseitigen, ortsgebundenen Wetterendpunkt mit Cache. Vorhersage, Abruf-/Anbieter-/Prognosezeit, Messhöhe und Datenlücken getrennt ausweisen. Keine Live-Messung. Anbieterquellen und technische Umsetzung in [Architektur, Abschnitt 13](Architekture.md#13-implementierte-p0-pitch-demo).
 
@@ -290,3 +290,44 @@ Historischer Übergabestand des Integrationsauftrags, vor der gesonderten Implem
 
 
 **Git-Übergabe (2026-10-21):** Der geprüfte Fly2You-Stand einschließlich App, Tests, Produktfotos, Bildquellen und Dokumentation wird im bestehenden `main` versioniert. Vor Commit: Remote-Stand abgerufen, vorgesehene Dateien, Ignore-Regeln, Dateigrößen, Schlüssel-Stichmuster und Whitespace geprüft. Keine blockierenden Befunde; keine Buildausgaben, Abhängigkeiten oder echten `.env`-Dateien vorgesehen. Offen bleiben die oben genannten externen Validierungen. Commit und Remote-Abgleich werden direkt nach Ausführung geprüft; die Git-Historie ist der maßgebliche Versionsnachweis.
+
+
+### Übergabe – QR-Launcher für Mockup und Produktionsseite (2026-10-22)
+
+**Beschlossene Anforderung (Nutzerauftrag 2026-10-22):** Ein Python-Skript im
+Projektstamm startet Mockup und echte Website gemeinsam über die
+Cloudflare-Quick-Tunnel-Methode und legt für beide beschriftete QR-Code-Bilder im
+Arbeitsverzeichnis ab. Der Nutzer hat ergänzt, dass die Lösung nur auf diesem
+Rechner funktionieren muss. Technische Umsetzung und Prüfresultate:
+[Architekture.md, Abschnitt 13](Architekture.md#qr-launcher-für-mockup-und-produktionsseite-2026-10-22);
+Aufruf und Voraussetzungen in [README.md](README.md#mockup-und-produktionsseite-gemeinsam-mit-qr-codes).
+
+- **Erledigt:** `launch_sites_qr.py` startet `next start` auf Port 3000 und das
+  gebaute Vite-Mockup (`Mockup/app/dist`) auf Port 4173, öffnet pro Website einen
+  Quick Tunnel und erzeugt `qr-mockup.png` (**MOCKUP**) und `qr-prod.png`
+  (**PROD**) mit URL-Text. Builds werden bei veralteten Artefakten automatisch
+  erneuert; `--rebuild` erzwingt dies. `Ctrl+C`/SIGTERM räumt Server und Tunnel ab.
+- **Geprüft:** Zwei Läufe mit neuen Tunnel-URLs; beide URLs HTTP 200 mit erwarteten
+  Seitentiteln; beide QR-PNGs dekodiert und sichtgeprüft; Ports und Tunnel nach
+  Beenden frei. Details in Architektur Abschnitt 13.
+- **Offen:** Quick Tunnels bleiben ohne Uptime-Zusage; jede Ausführung erzeugt neue
+  URLs. Ein Zugriff von einem zweiten physischen Gerät wurde nicht erneut geprüft.
+- **Blockiert:** Nichts.
+- **Nächster Schritt:** `python3 launch_sites_qr.py` vor der Präsentation starten
+  und die erzeugten QR-Bilder verwenden; Skript bis zum Ende der Vorführung laufen
+  lassen.
+- **Geänderte Dateien:** `launch_sites_qr.py` (neu), `README.md`,
+  `Architekture.md`, `Konzept.md`, `.gitignore`; generierte `qr-*.png` bleiben
+  unversionierte Laufzeitartefakte. `AGENTS.md` unverändert. Kein Commit/Push ausgeführt.
+
+### Übergabe – abschließende UI-Inkonsistenzprüfung (2026-11-08)
+
+**Auftrag (2026-11-08):** tiefes, finales Inkonsistenz-Review der Benutzeroberfläche der Produktionsseite, ohne das GUI-Konzept zu verändern. Umsetzung und Prüfumfang: [Architekture.md, Abschnitt 13](Architekture.md#konsistenzprüfung-der-produktionsseite-2026-11-08).
+
+- **Erledigt:** Einheitliche Begriffe (**Tasche** in der Oberfläche, „Szenario“ statt „Störungsszenario“), eindeutige Statusbeschriftungen (Vorbereitung vs. Lieferung), Empfang nur als eigener Schritt (auch im Pitch-Menü), abgeleitete Zähler statt Literale, deutsches Wetterpanel mit Zielbezug, modusabhängige Leerzustände, Erfolgs-/Fehler-Toasts, `type="button"` überall, Kategorie-Icons über explizite Zuordnung, Kartenpalette auf den Projekt-Tokens samt einheitlicher Fokusfarbe und ein gemeinsamer Marine-Token für Demo-Leiste und Kartenknoten. Das `theme-color`-Meta folgt dem Dunkelmodus.
+- **Geprüft:** `tsc --noEmit` 0 Fehler, `vitest run` 76/76, `next build` erfolgreich, `playwright test` 25/25 (inklusive axe WCAG A/AA und 360×800/1440×1000), Sichtprüfung hell/dunkel. Der Herbstlaub-Effekt animiert bei erlaubter Bewegung und pausiert bei `prefers-reduced-motion`.
+- **Nachtrag (2026-11-08, Karten):** Die Routing-Ansicht ist jetzt eine Drohnenübersicht mit zwei simulierten Dauerflügen (A Hinweg, C Rückweg) und nur Hub plus Zielstation als Marker; die Stationsansicht führt Karte und Schritte-Liste zusammen (Hub, Flug, Ankunft, Rückflug zum Hub). Die Bewegung gleitet weich und pausiert bei `prefers-reduced-motion`. Prüfumfang: 27/27 Browserfälle. Details in Architektur.
+- **Offen:** Prüfung in Safari/Firefox und mit einem echten Screenreader.
+- **Blockiert:** Nichts.
+- **Nächster Schritt:** Änderungen versionieren und als eigenen PR gegen das Basis-Repository stellen.
+- **Geänderte Dateien:** `src/components/PitchApp.tsx`, `PitchApp.module.css`, `NetworkMap.tsx`, `NetworkMap.module.css`, `WeatherPanel.tsx`, `AutumnLeavesToggle.tsx` (neu), `src/app/globals.css`, `src/domain/checkout.ts`, `orders.ts`, `catalog.ts`, `routing.ts`, `src/demo/session.ts`, `season.ts` (neu), `src/components/ProductArt.tsx` (entfernt), Tests (`tests/pitch.spec.ts`, `src/domain/consistency.test.ts`, `src/demo/season.test.ts`, `checkout.test.ts`), `package.json`/`package-lock.json` (neue Abhängigkeit `falling-leaves`), `docs/licenses/*`, `README.md`, `Architekture.md`, `Konzept.md`.

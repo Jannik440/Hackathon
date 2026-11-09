@@ -428,7 +428,7 @@ Die Bilder sind Anschauungsmaterial für fiktive Angebote. Fotos belegen weder P
 | Einkauf Fahrrad und Selbstabholung | Gesamte Zustandsfolge bestanden; Ankunft vor Empfang, Selbstabholung ohne Lieferauftrag/-gebühr |
 | Quote, Bestand und Filiale | 120s-Ablauf, Neuberechnung, Filialwechsel mit Zustimmung, unbestätigt/ausverkauft/geschlossen, Doppelklick und Reload bestanden |
 | Stationen | Ankunft, Einlagerung, Abholbereitschaft und Kundenabholung getrennt; vorbereitete Simulation nach Netzverlust bedienbar |
-| Routing | Gesperrter Korridor führt über Alternative; volle/ausgefallene Station und simuliertes Wetter verhindern Simulation; reale Bewertung UNBESTIMMT |
+| Routing | Gesperrter Korridor führt über Alternative; volle/ausgefallene Station verhindern die Simulation; reale Bewertung UNBESTIMMT. Simuliertes Wetterszenario auf Nutzerwunsch (2026-11-08) entfernt. |
 | Wetterherkunft / Neustart | Online-Vorhersage bleibt getrennt vom Wetterszenario, auch nach Reset; echte Anbieterantwort separat nachgewiesen |
 | Kartenfehler | Kachelausfall zeigt Hinweis und bedienbares schematisches Netz; mobile Attribution sichtbar |
 | Alle Produktkategorien | Alle 40 Angebots-Hauptbilder in 9 Kategorien tatsächlich geladen; keine bloße Dateiprüfung |
@@ -460,3 +460,74 @@ Sitzungsversion 2 nutzt weiterhin denselben Speicherschlüssel, damit gültige v
 **Sichtprüfung / temporäre Nachweise:** `/tmp/fly2you-mobile-final.png`, `/tmp/fly2you-desktop-final.png`, `/tmp/fly2you-drone-cart-mobile-final.png`, `/tmp/fly2you-drone-cart-desktop-final.png`, `/tmp/fly2you-drone-tracking-final.png`; Browserberichte unter `/tmp/fly2you-test-results`. Startmotiv ist eine 1400px-WebP-Ableitung von `assets/pitch/04-stadtvision.png`, Original bewahrt. Keine zusätzliche Bildgenerierung für die Umbenennung.
 
 **Grenzen unverändert:** Reale Wetterbewertung bleibt UNBESTIMMT. Browserfixtures sind keine echte Anbieterantwort; der oben datierte echte Wetterabruf bleibt der frühere Integrationsnachweis und wurde für diese UI-Änderung nicht als neue Messung ausgegeben. Keine echten Drohnen, Nutzlast-/Verpackungs-/Gefahrgutnachweise, Reservierungsserver oder Flugsteuerung. Zweites physisches WLAN-Gerät, weitere Browser und vollständige manuelle Screenreaderprüfung bleiben offen.
+
+### QR-Launcher für Mockup und Produktionsseite (2026-10-22)
+
+**Implementiert und lokal geprüft:** `launch_sites_qr.py` startet die vorhandene
+Produktionsseite und das Vite-Mockup parallel, veröffentlicht beide über je einen
+Cloudflare Quick Tunnel und erzeugt zwei beschriftete QR-Codes im Projektstamm.
+Der Auftrag nennt ausdrücklich nur diesen Rechner als Zielumgebung.
+
+| Bestandteil | Umsetzung |
+|---|---|
+| Produktionsseite | `node_modules/.bin/next start --hostname 127.0.0.1 --port 3000`; Warten auf HTTP-Antwort vor dem Tunnelstart |
+| Mockup | eigener `ThreadingHTTPServer` auf `127.0.0.1:4173` mit `Mockup/app/dist` als Wurzel |
+| Tunnel | `.tools/cloudflared tunnel --url http://127.0.0.1:<port> --no-autoupdate`, je Website ein Prozess; URL per Regex `https://[a-z0-9-]+\.trycloudflare\.com` aus der Ausgabe |
+| QR-Codes | `qrcode` (Fehlerkorrektur M, `box_size` 12) plus Pillow; Überschrift **MOCKUP** bzw. **PROD**, Untertitel und URL als Text; Ausgabe `qr-mockup.png`/`qr-prod.png` |
+| Builds | automatische Neuerzeugung, wenn `.next/BUILD_ID` bzw. `Mockup/app/dist/index.html` älter ist als die jeweiligen Quelldateien; `--rebuild` erzwingt beide Builds |
+| Aufräumen | `SIGINT`, `SIGTERM` und `SIGHUP` beenden Tunnel und Server über Prozessgruppen (`start_new_session=True`); Ports 3000/4173 werden freigegeben |
+
+**Prüfresultate (2026-10-22):** Zwei aufeinanderfolgende Läufe erzeugten jeweils
+neue Quick-Tunnel-URLs. Beide öffentlichen URLs lieferten HTTP 200 mit den
+erwarteten Titeln `FlyToYou - Lokale Lieferplattform` (Mockup) und
+`Fly2You · Wuppertal` (Produktionsseite). `cv2.QRCodeDetector` dekodierte beide
+PNGs und gab exakt die jeweilige Tunnel-URL zurück; die Bilder wurden zusätzlich
+sichtgeprüft (Überschrift, Untertitel, URL). Nach `SIGINT` und nach `SIGTERM` waren
+keine Prozesse auf Port 3000/4173 und keine `cloudflared tunnel`-Prozesse mehr
+vorhanden.
+
+**Grenzen:** Quick Tunnel bleiben ohne Uptime-Zusage, die URL wechselt bei jedem
+Start, und die QR-Dateien sind deshalb nicht versioniert. Der Launcher setzt
+Python 3 mit `qrcode` und Pillow sowie ein vorhandenes oder automatisch
+installierbares `cloudflared` voraus. Er verändert keine App-Logik und belegt
+keine Betriebs- oder Veröffentlichungsfreigabe der Demo.
+
+### Konsistenzprüfung der Produktionsseite (2026-11-08)
+
+**Auftrag (2026-11-08):** abschließendes, tiefes Inkonsistenz-Review der Benutzeroberfläche von `src/` (Fly2You), ohne das Gestaltungskonzept zu verändern. Alle Befunde sind behoben; die Demo-Logik, Grenzen und Kennzeichnungen bleiben unverändert.
+
+| Bereich | Befund und Behebung |
+|---|---|
+| Begriffe | „Tasche“ und „Warenkorb“ wurden gemischt. Die Oberfläche und die sichtbaren Domänentexte verwenden jetzt durchgehend **Tasche**; `README.md` nennt die Doppelung ausdrücklich. „Störungsszenario“ heißt im UI einheitlich **Szenario**. |
+| Statuswerte | `preparationStatusLabel.READY` und `deliveryStatusLabel.READY_FOR_COLLECTION` hießen beide „Abholbereit“. Neu: „Beim Händler abholbereit“ und „An der Station abholbereit“. |
+| Empfangsschritt | Der Empfang ist ein eigener Schritt: im Stationslauf (Schritt 4) und beim Drohnenauftrag (Schritt 8) heißt die Aktion überall „Abholung in der Demo bestätigen“, auch im Pitch-Menü; der Abspielknopf bleibt dort gesperrt. |
+| Einheiten | Zeitfenster durchgehend „Min.“; ETA der Drohne ist „Abholbereit“, nur das Fahrrad „Ankunft“. |
+| Abgeleitete Werte | Fotoanzahl (Badge, Galerie, Zähler), Flottengröße und Filialzahl kommen aus den Daten statt aus Literalen. |
+| Wetterpanel | Die Ortsauswahl zeigte englische Rohwerte (`available`, `partial`, …). Neu sind deutsche Kurz- und Langformen. Das Panel folgt dem gewählten Ziel statt immer den Hub zu zeigen. Fehlende Werte nutzen einheitlich „–“. |
+| Leerzustände | Die leere Tasche beschreibt jetzt den gewählten Modus (Drohne, Fahrrad, Abholung) statt immer die Drohne; das Symbol passt dazu. |
+| Aktionen | Alle Buttons tragen `type="button"`; die Kategorie-Chips sind eine benannte Gruppe; die Kategorie-Icons kommen aus einer expliziten Zuordnung statt aus einer Zeichenkettenkette. |
+| Rückmeldungen | Toasts unterscheiden Erfolg und Fehler (Symbol, Farbe, `role="alert"` bei Fehlern). Vorher zeigte auch eine Fehlermeldung ein Häkchen. |
+| Farben | Das Kartenmodul hatte eine eigene Palette (`#2466ed`, `#153454`, `#586c82`, Fokus `#efae35`). Es nutzt jetzt die Projekt-Tokens (`--blue`, `--ink`, `--muted`, `--line`, `--surface`, `--soft`, `--green`); eine Marinefarbe `--navy` gilt für Demo-Leiste und Kartenknoten, der Kartenfokus entspricht dem globalen Fokus. |
+| Theme | Das `theme-color`-Meta folgt dem Umschalten auf Dunkelmodus. |
+| Karte | Der Rückfallhinweis „Netzansicht öffnen“ nutzt denselben Umschalter wie der sichtbare Schalter, sodass Toolbar und Karte nie widersprüchlich stehen. |
+| Herbstlaub | Optionaler Effekt über `falling-leaves` (MIT): nur Ahornform, **standardmäßig aus**, ausdrückliche Wahl wird gespeichert, pausiert bei `prefers-reduced-motion`. Lizenz in `docs/licenses/Falling-Leaves-MIT.txt`. |
+
+**Prüfumfang (2026-11-08):** `tsc --noEmit` ohne Fehler; `vitest run` 76/76 in 8 Dateien; `next build` erfolgreich; `playwright test` 25/25 gegen `next start`, einschließlich axe (WCAG A/AA) auf Entdecken, Stationen, Routing, Taschendialog und Galerie sowie 360×800 und 1440×1000. Sichtprüfung in Hell und Dunkel bei 1200 und 1440 px. Zusätzlich geprüft: Canvas des Herbstlaub-Effekts animiert bei `prefers-reduced-motion: no-preference` und bleibt bei `reduce` stehen.
+
+**Grenzen:** Nur Chromium geprüft; kein Screenreader- und kein Safari-/Firefox-Lauf. Die Änderungen betreffen ausschließlich Darstellung, Texte und Ableitungen; Fachlogik, Simulation und die Kennzeichnung „UNBESTIMMT“ bleiben unverändert.
+
+### Drohnenübersicht und weiche Kartenbewegung (2026-11-08)
+
+**Auftrag (2026-11-08):** Die Routing-Ansicht als Drohnenübersicht mit mehreren gleichzeitig fliegenden, simulierten Drohnen; die Karte im Abschnitt Stationen soll zur darunterliegenden Schritte-Liste passen; die Bewegung soll weich sein. Damit die Karte nicht überladen wirkt, zeigen die Karten nur die jeweils nötigen Stationen.
+
+| Bereich | Umsetzung |
+|---|---|
+| Routing | Karte zeigt nur Demo-Hub und gewähltes Ziel als Marker (statt aller drei Stationen). Auf der gewählten Route kreisen zwei simulierte Dauerflüge: Drohne A auf dem Hinweg, Drohne C versetzt auf dem Rückweg. Der Badge nennt die Anzahl („2 simulierte Drohnen im Flug · Beispielzeiten“); ist das Ziel voll, ausgefallen oder wetterbedingt gesperrt, entfallen die Flüge und der Badge bleibt neutral („Demo-Netz · Beispielzeiten“). |
+| Flottenstatus | Der Status in der Flottenliste folgt den Flügen: A und C stehen auf „Unterwegs“, solange ihre Flüge aktiv sind; B lädt unverändert (Beispieldaten). |
+| Stationen | Die Karte spiegelt die sechs Schritte: Drohne am Hub (Schritt 0), unterwegs (Schritt 1), an der Station (Schritte 2–4). Nach der bestätigten Abholung zeigt die Linie den Rückweg und die Drohne steht wieder am Hub; der Statustext nennt den simulierten Rückflug ausdrücklich. Marker: nur Hub und gewähltes Ziel. |
+| Bewegung | `NetworkMap` interpoliert Einzelpositionen und Dauerflüge per `requestAnimationFrame`; die Fahrzeuge springen nicht mehr im 300-ms-Takt, sondern gleiten gleichmäßig. Die Animation läuft ohne React-Render pro Frame. Bei `prefers-reduced-motion: reduce` werden feste Positionen gesetzt. |
+| Grenzen | Die Flugbahnen, Umlaufzeiten und Positionen sind illustrative Demo-Werte, keine Telemetrie. Schnittstellen und Kennzeichnung „UNBESTIMMT“ bleiben unverändert. |
+
+**Prüfumfang (2026-11-08):** `tsc --noEmit` ohne Fehler; `vitest run` 76/76; `next build` erfolgreich; `playwright test` 27/27, neu: „routing is a drone overview with minimal stations and several simulated flights“ (prüft zwei Marker, zwei bewegte Drohnen, Netzansicht und Wetterstopp) und „station map mirrors the step list from hub to station and back“ (prüft Hub-, Stations- und Rückflugposition). Gemessen im Browser: 28 verschiedene Marker-Transformationen in 1,5 s statt eines Sprungs pro 300 ms; in der Netzansicht 18 verschiedene Positionen in 1,1 s.
+
+**Statische Vorschau (2026-11-08):** Der Fork veröffentlicht die Demo als rein statische Seite unter `https://basalthasar.github.io/Hackathon/`. Der Build läuft mit `GITHUB_PAGES=true`, `NEXT_PUBLIC_BASE_PATH=/Hackathon` und `NEXT_PUBLIC_STATIC_EXPORT=true`; dabei entfallen `src/app/api` und die `*.test.ts`, `.nojekyll` verhindert die Jekyll-Verarbeitung. Das Ergebnis liegt im Branch `gh-pages` und wird von GitHub Pages als Branch-Deployment ausgeliefert. Bildpfade werden über `src/lib/paths.ts` präfixiert; ohne Präfix bleibt der Pfad unverändert. Das Wetterpanel erkennt den statischen Betrieb und zeigt „Nicht verfügbar (statische Vorschau)"; die reale Bewertung bleibt UNBESTIMMT. Eine Workflow-Vorlage für die Automatisierung liegt in `docs/deploy/pages.yml` und benötigt den Token-Scope `workflow`. Grenzen: kein Serverbetrieb, keine echte Wettervorhersage; die Seite ist eine Vorschau, keine Betriebsfreigabe.
