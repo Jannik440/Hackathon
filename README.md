@@ -10,6 +10,11 @@ Händler, Angebote, Bestände, Preise, Fahrzeuge, Stationen, Zahlungen und Liefe
 
 Voraussetzung für App und Tests: Node.js **22 ab 22.12**, **24** oder **26 und neuer** sowie npm (entsprechend den installierten Testwerkzeugen). Next.js allein benötigt mindestens 20.9. Die Entwicklung wurde mit Node.js **26.8.2** ausgeführt. Internet wird für die Paketinstallation sowie für Kartenkacheln und aktuelle Vorhersagen benötigt.
 
+Alle Befehle laufen gleichwertig auf **Linux, macOS und Windows** (Intel wie Apple
+Silicon); es gibt keine plattformspezifischen Skripte. Auf macOS kann beim ersten
+Start die Firewall-Abfrage für Node erscheinen — für den lokalen Betrieb genügt
+„Zulassen“, für den Zugriff vom Smartphone im WLAN ist sie nötig.
+
 Im Projektordner:
 
 ```sh
@@ -20,7 +25,7 @@ npm start
 
 `npm start` startet den Produktionsserver auf **0.0.0.0:3000**. Auf dem Präsentationsrechner [http://localhost:3000](http://localhost:3000) öffnen. Für die Entwicklung gibt es alternativ `npm run dev`, ebenfalls auf `0.0.0.0:3000`.
 
-Rechner und Smartphone müssen im selben WLAN sein. Dieser Befehl zeigt in einem zweiten Terminal die IPv4-Adressen des Rechners:
+Rechner und Smartphone müssen im selben WLAN sein. Dieser Befehl zeigt in einem zweiten Terminal die IPv4-Adressen des Rechners (plattformunabhängig):
 
 ```sh
 node -e 'for (const [name, entries] of Object.entries(require("node:os").networkInterfaces())) for (const entry of entries ?? []) if (entry.family === "IPv4" && !entry.internal) console.log(name + ": http://" + entry.address + ":3000")'
@@ -42,6 +47,111 @@ Standardmäßig sind keine API-Schlüssel erforderlich. [`.env.example`](.env.ex
 
 `NEXT_PUBLIC_*` wird in den Browserbuild übernommen. Nach Änderungen erneut `npm run build` ausführen und den Server neu starten. Diese Variablen dürfen keine Geheimnisse enthalten. Bei einer anderen Kartenquelle gelten deren Nutzungsbedingungen.
 
+## Öffentlicher Zugriff über Cloudflare Tunnel
+
+Der Tunnel macht den lokalen Server ohne Router-Freigabe oder Cloudflare-Konto
+im Internet erreichbar. Er ist für Demo und Präsentation gedacht, nicht als
+Produktionsbetrieb.
+
+### Production-Server veröffentlichen
+
+Terminal 1:
+
+```sh
+npm ci
+npm run build
+npm start
+```
+
+Terminal 2:
+
+```sh
+npm run cloudflare:tunnel
+```
+
+Die Ausgabe von cloudflared enthält eine URL wie
+`https://<zufall>.trycloudflare.com`. Diese URL im Browser öffnen.
+
+### Entwicklungsserver veröffentlichen
+
+```sh
+npm run dev
+# zweites Terminal
+npm run cloudflare:tunnel -- --port 3000
+```
+
+### Installation ohne npm-Abhängigkeit
+
+`npm run cloudflare:tunnel` installiert cloudflared beim ersten Start
+automatisch nach `.tools/`. Das funktioniert auf:
+
+- macOS Intel und Apple Silicon
+- Linux x64 und arm64
+- Windows x64
+
+Es wird kein Homebrew, kein winget und kein zusätzliches npm-Paket benötigt.
+Für eine manuelle Installation:
+
+```sh
+npm run cloudflare:install
+```
+
+Ein vorhandenes Binary kann erzwungen werden:
+
+```sh
+CLOUDFLARED_BIN=/absoluter/pfad/cloudflared npm run cloudflare:tunnel
+```
+
+Auf macOS kann ein bereits installiertes Homebrew-Binary verwendet werden:
+
+```sh
+CLOUDFLARED_BIN="$(brew --prefix cloudflared)/bin/cloudflared" npm run cloudflare:tunnel
+```
+
+### Grenzen
+
+- Quick Tunnels haben keine Uptime-Garantie.
+- Die URL ändert sich bei jedem Neustart.
+- Für eine feste Domain ist ein benannter Cloudflare-Tunnel mit Account
+  erforderlich.
+- Der Tunnel veröffentlicht die Demo-App. Keine echten Zahlungs-, Liefer- oder
+  Flugdaten und keine Geheimnisse in der App hinterlegen.
+- Bei einem Netzwerkwechsel zuerst den Server neu starten und die neue lokale
+  Erreichbarkeit prüfen.
+
+### Mockup und Produktionsseite gemeinsam mit QR-Codes
+
+`launch_sites_qr.py` startet beide Websites gleichzeitig und veröffentlicht jede
+über einen eigenen Cloudflare Quick Tunnel:
+
+```sh
+python3 launch_sites_qr.py
+python3 launch_sites_qr.py --rebuild          # beide Builds neu erzeugen
+python3 launch_sites_qr.py --prod-port 3000 --mockup-port 4173
+```
+
+| Bestandteil | Lokal | Veröffentlichung |
+|---|---|---|
+| Produktionsseite | `next start` auf `127.0.0.1:3000` | Quick Tunnel → `https://<zufall>.trycloudflare.com` |
+| Mockup (`Mockup/app/dist`) | statischer Python-Server auf `127.0.0.1:4173` | Quick Tunnel → `https://<zufall>.trycloudflare.com` |
+
+Im Projektstamm entstehen zwei beschriftete QR-Bilder: `qr-mockup.png` (Aufschrift
+**MOCKUP**) und `qr-prod.png` (Aufschrift **PROD**). Jedes Bild enthält zusätzlich
+die öffentliche URL als Text. Die Dateien sind generierte Laufzeitartefakte und
+werden nicht versioniert; die URL ändert sich bei jedem Start.
+
+Voraussetzungen: Python 3 mit `qrcode` und Pillow, Node.js und `cloudflared`
+(wird bei Bedarf über `scripts/install-cloudflared.mjs` nach `.tools/` geladen).
+Fehlt ein Build oder ist er älter als die Quelldateien, wird er automatisch neu
+erzeugt. `Ctrl+C` beendet beide Server und beide Tunnel; die Ports werden
+freigegeben.
+
+**Geprüft am 22. Oktober 2026:** Beide öffentlichen URLs antworteten mit HTTP 200
+und dem erwarteten Seitentitel (`FlyToYou - Lokale Lieferplattform` für das Mockup,
+`Fly2You · Wuppertal` für die Produktionsseite), die QR-Bilder wurden dekodiert und
+enthielten die jeweilige URL, und `Ctrl+C`/SIGTERM beendeten Server und Tunnel ohne
+verbleibende Prozesse auf Port 3000/4173. Quick Tunnels bleiben ohne Uptime-Zusage.
+
 ## In fünf Minuten vorführen
 
 1. **Entdecken, etwa eine Minute:** „Bio Haferflocken“ suchen und die Filialangebote vergleichen. Zwei Produkte derselben Filiale in die Tasche legen. Ein Artikel einer anderen Filiale zeigt den ausdrücklichen Wechselhinweis; „Tasche behalten“ erhält den bisherigen Einkauf.
@@ -51,6 +161,26 @@ Standardmäßig sind keine API-Schlüssel erforderlich. [`.env.example`](.env.ex
 5. **Stationen und Wetter, etwa eine Minute:** „Simulation abspielen“ öffnet die gesonderte Stationsvorschau. Ankunft, Einlagerung, Abholbereitschaft und Kundenabholung bleiben getrennt. In Routing die Wetterdetails öffnen: Ort, Herkunft, Zeitangaben und Fenster einschließlich Rückweg erläutern. Reale Bewertung: **UNBESTIMMT**.
 
 Das **Pitch-Menü** bietet Seitenwechsel, Pause/Fortsetzung, manuelle Schritte, Szenarioauswahl und einen bestätigten Neustart. Ein Szenario- oder Zielwechsel beginnt die Stationssimulation neu und verwirft ein noch ungebuchtes Drohnen-Angebot. Bestehende Aufträge behalten ihr gespeichertes Ziel und Szenario. Der Neustart löscht Warenkorb, Demo-Bestellungen und Stationsfortschritt dieses Browsers. Jedes Gerät hat eine eigene Sitzung ohne geräteübergreifende Synchronisierung.
+
+## Pitch-Deck
+
+Das zehnseitige Deck liegt unter `praesentation/` (reines HTML/CSS/JS, kein
+Build-Schritt) und läuft offline. Start:
+
+```sh
+npm run praesentation
+```
+
+Der kleine Server hört auf Port 8910 und öffnet den Browser — auf Linux, macOS
+und Windows. Details, Tastenkürzel und QR-Größen stehen in
+[`praesentation/README.md`](praesentation/README.md).
+
+Zum Weitergeben gibt es einen Export ohne Abhängigkeiten:
+
+```sh
+npm run praesentation:export   # erzeugt pitch-deck-export/ zum Zippen
+```
+
 
 ## Umfang und Fehlerfälle
 
